@@ -1,6 +1,7 @@
 package io.github.jeqo.posts.resource;
 
 import io.github.jeqo.posts.infrastructure.KafkaHelloWorldProducer;
+import io.opentracing.contrib.dropwizard.Trace;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -20,6 +21,7 @@ public class HelloWorldResource {
 
   @GET
   @Path("{name}")
+  @Trace
   public Response sayHi(@PathParam("name") final String name) {
     producer.send(name);
     return Response.accepted("done.").build();

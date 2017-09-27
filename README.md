@@ -112,3 +112,136 @@ Hi jeqo
 ```
 
 So far these are common Kafka producer/consumer applications.
+
+### OpenTracing Instrumentation
+
+OpenTracing has enrich its integration throw projects that we can
+contribute: https://github.com/opentracing-contrib/
+
+We will follow the next steps:
+
+1. Instrument Dropwizard
+
+2. Instrument Kafka Producer
+
+3. Instrument Kafka Consumer
+
+4. Test complete Traces
+
+#### Instrument Dropwizard
+
+We are following this step to have a complete view since request is
+received.
+
+Firsts let's add Maven dependencies:
+
+```xml
+        <dependency>
+            <groupId>io.opentracing</groupId>
+            <artifactId>opentracing-api</artifactId>
+            <version>0.30.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentracing.contrib.dropwizard</groupId>
+            <artifactId>dropwizard-opentracing</artifactId>
+            <version>0.2.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.uber.jaeger</groupId>
+            <artifactId>jaeger-core</artifactId>
+        </dependency>
+```
+
+First, the `opentracing-api` dependency.
+
+Then `dropwizard-opentracing` that is the instrumentation for
+DropWizard applications
+that handles traces for all of your JAX-RS resource's operations by default.
+
+And `jaeger-core` that implements OpenTracing API and
+adds the Jaeger Java Client to connect to Jaeger Agent.
+
+Then, we need to instantiate and register the Tracer on the Application
+class:
+
+```java
+    final Tracer tracer = //(1)
+        new com.uber.jaeger.Configuration(
+            getName(),
+            new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+            new com.uber.jaeger.Configuration.ReporterConfiguration(
+                true,  // logSpans
+                "localhost",
+                6831,
+                1000,   // flush interval in milliseconds
+                10000)  /*max buffered Spans*/)
+            .getTracer();
+    GlobalTracer.register(tracer); //(2)
+    final DropWizardTracer dropWizardTracer = new DropWizardTracer(tracer); //(3)
+    environment.jersey()
+        .register(
+            new ServerTracingFeature.Builder(dropWizardTracer)
+                .withTraceAnnotations()
+                .build());
+```
+
+In the first operation, we are instantiating a `Tracer` object with
+Jaeger. Jaeger Agent should be running on port `localhost:6831`.
+
+Then we are registering the `tracer` on the `GlobalTracer` helper, to
+reference it from other layers.
+
+And in the third step, we are integrating the tracer with DropWizard.
+We are configuring this integration to only trace operations with
+`@Trace` annotation: `.withTraceAnnotations()`
+
+So, your resource class, should looks like this:
+
+```java
+  @GET
+  @Path("{name}")
+  @Trace
+  public Response sayHi(@PathParam("name") final String name) {
+    producer.send(name);
+    return Response.accepted("done.").build();
+  }
+```
+
+Let's install and start Jaeger, in its standalone version:
+
+```
+cd jaeger/
+./install-jaeger.sh
+```
+
+And then:
+
+```
+./start-standalone.sh
+```
+
+Once it is started, you can go to: http://localhost:16686/search
+
+And check its UI.
+
+Now, let's run a first request to check if a trace is created:
+
+```
+curl http://localhost:8080/hello/jorge
+```
+
+And refresh the Jaeger UI:
+
+![first trace](./images/first-trace.png)
+
+Cool! Now we have how long it takes to return a response on the
+producer side :)
+
+From here we can start asking:
+
+How long it takes to execute the `send` operation by the Kafka
+Producer? How long it takes to receive metadata from broker?
+How long it takes to receive the record on the consumer side?
+Did the consumer side receive the message?
+
+This are the question we should be able to solve using OpenTracing.

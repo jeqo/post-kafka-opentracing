@@ -7,6 +7,10 @@ import io.github.jeqo.posts.resource.HelloWorldResource;
 
 import java.util.Properties;
 
+import io.opentracing.Tracer;
+import io.opentracing.contrib.dropwizard.DropWizardTracer;
+import io.opentracing.contrib.dropwizard.ServerTracingFeature;
+import io.opentracing.util.GlobalTracer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -36,6 +40,27 @@ public final class HelloWorldProducerApp extends Application<HelloWorldProducerC
    */
   public void run(HelloWorldProducerConfig config, Environment environment)
       throws Exception {
+    //Instantiate and register Tracer
+    final Tracer tracer =
+        new com.uber.jaeger.Configuration(
+            getName(),
+            new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+            new com.uber.jaeger.Configuration.ReporterConfiguration(
+                true,  // logSpans
+                "localhost",
+                6831,
+                1000,   // flush interval in milliseconds
+                10000)  /*max buffered Spans*/)
+            .getTracer();
+    GlobalTracer.register(tracer);
+    final DropWizardTracer dropWizardTracer = new DropWizardTracer(tracer);
+    environment.jersey()
+        .register(
+            new ServerTracingFeature.Builder(dropWizardTracer)
+                .withTraceAnnotations()
+                .build());
+
+
     //Define Kafka Producer Properties
     final Properties producerProperties = new Properties();
     producerProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
