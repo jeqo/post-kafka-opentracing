@@ -16,7 +16,7 @@ import java.util.Collections;
  */
 public final class KafkaGreetingsHandler implements Runnable {
 
-  static final String GREETINGS_TOPIC = "greetings-topic";
+  private static final String GREETINGS_TOPIC = "greetings-topic";
   private final Consumer<String, String> kafkaConsumer;
   private final Tracer tracer;
 
@@ -35,8 +35,9 @@ public final class KafkaGreetingsHandler implements Runnable {
         for (ConsumerRecord<String, String> consumerRecord : consumerRecords) {
           final SpanContext context =
               TracingKafkaUtils.extractSpanContext(consumerRecord.headers(), tracer);
-          try (ActiveSpan activeSpan =
+          try (ActiveSpan ignored =
                    tracer.buildSpan("consumption")
+                       .withTag("user", consumerRecord.key())
                        .asChildOf(context)
                        .startActive()) {
             System.out.println(consumerRecord.value());

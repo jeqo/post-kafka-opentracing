@@ -472,3 +472,59 @@ we can use `TracingKafkaUtils` to extract it, and reference it:
 ---
 Source code on branch: steps/step-03
 ---
+
+## Recommendations
+
+### Trace Tags
+
+One important feature of OpenTracing API is supporting `tags`. These
+help to reference metadata that enables reference to business data
+that can be use to map your trace with a transaction.
+
+Also don't try to overuse `tags` and use something like the Elastic Stack
+or Splunk to store your logging messages, and use `tags` just to reference
+the transaction ID, the entity ID or user ID.
+
+For instance, in this case, we can add a tag to track the name:
+
+On the producer side:
+
+```java
+    try (ActiveSpan ignored =
+             dropWizardTracer.getTracer()
+                 .buildSpan("sayHi")
+                 .asChildOf(span)
+                 .withTag("user", name)
+                 .startActive()) {
+      producer.send(name);
+      return Response.accepted("done.").build();
+    }
+```
+
+And in the consumer side, the same story:
+
+```java
+          try (ActiveSpan ignored =
+                   tracer.buildSpan("consumption")
+                       .withTag("user", consumerRecord.key())
+                       .asChildOf(context)
+                       .startActive()) {
+            System.out.println(consumerRecord.value());
+
+            kafkaConsumer.commitSync();
+          }
+```
+
+And you can filter now from the UI:
+
+![Complete trace](./images/tags.png)
+
+### Dropwizard Helpers
+
+I have developed some Dropwizard modules to help to instantiate
+Kafka Clients, create Topics, instantiate Traces, and so on. I'm working
+on Documentation but you can find it on Maven Central already:
+
+https://github.com/jeqo/dropwizard-modules/
+
+https://mvnrepository.com/artifact/io.github.jeqo.dropwizard

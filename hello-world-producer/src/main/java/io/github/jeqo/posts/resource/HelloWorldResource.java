@@ -34,10 +34,11 @@ public class HelloWorldResource {
                         @PathParam("name") final String name) {
     final Span span = dropWizardTracer.getSpan(request);
 
-    try (ActiveSpan activeSpan =
+    try (ActiveSpan ignored =
              dropWizardTracer.getTracer()
                  .buildSpan("sayHi")
                  .asChildOf(span)
+                 .withTag("user", name)
                  .startActive()) {
       producer.send(name);
       return Response.accepted("done.").build();
