@@ -34,10 +34,6 @@ side will poll events and print out to console.
 
 ## Implementation
 
----
-Branch: steps/step-01
----
-
 Let's assume we have a simple application that produce `greetings` events
 and another application that consumes and print those events.
 
@@ -112,6 +108,10 @@ Hi jeqo
 ```
 
 So far these are common Kafka producer/consumer applications.
+
+---
+Source code on branch: steps/step-01
+---
 
 ### OpenTracing Instrumentation
 
@@ -234,6 +234,10 @@ And refresh the Jaeger UI:
 
 ![first trace](./images/first-trace.png)
 
+---
+Source code on branch: steps/step-02
+---
+
 Cool! Now we have how long it takes to return a response on the
 producer side :)
 
@@ -245,3 +249,100 @@ How long it takes to receive the record on the consumer side?
 Did the consumer side receive the message?
 
 This are the question we should be able to solve using OpenTracing.
+
+
+Now let's add instrumentation for Kafka Clients:
+
+First, let's add another dependency:
+
+```
+<dependency>
+    <groupId>io.opentracing.contrib</groupId>
+    <artifactId>opentracing-kafka-client</artifactId>
+    <version>0.0.4</version>
+</dependency>
+```
+
+https://github.com/opentracing-contrib/java-kafka-client
+
+And let's wrap the tracer on a `TracingKafkaProducer`:
+
+```java
+    final KafkaProducer<String, String> kafkaProducer =
+        new KafkaProducer<>(producerProperties, new StringSerializer(), new StringSerializer());
+    final TracingKafkaProducer<String, String> tracingKafkaProducer =
+        new TracingKafkaProducer<>(kafkaProducer, tracer);
+
+```
+
+The main difference, is that `TracingKafkaProducer` will inject
+tracing context on Kafka Headers (supported since v0.11.0).
+
+That's it, let's redeploy and test again.
+
+![Traces not linked](./images/second-traces-not-linked.png)
+
+Wait!!! but we only run one request, why do we have 2 traces???
+
+The thing is that to create `spans` that are related, we need to create
+a reference.
+
+How do we do this?
+
+First, we need to obtain the span from the request, and then create an
+`ActiveSpan` that will wrap the execution of Kafka Client. Let's see
+how this looks:
+
+Let's go to the resource operation and add a parameter:
+
+```java
+  public Response sayHi(@Context final Request request,
+                        @PathParam("name") final String name) {
+```
+
+Then we can use it to get the span using the DropwizardTracer:
+
+```java
+@Path("hello")
+public class HelloWorldResource {
+  private final DropWizardTracer dropWizardTracer; //(1)
+  private final KafkaHelloWorldProducer producer;
+
+  public HelloWorldResource(final DropWizardTracer dropWizardTracer,
+                            final KafkaHelloWorldProducer producer) {
+    this.dropWizardTracer = dropWizardTracer;
+    this.producer = producer;
+  }
+
+  @GET
+  @Path("{name}")
+  @Trace
+  public Response sayHi(@Context final Request request,  //(2)
+                        @PathParam("name") final String name) {
+    final Span span = dropWizardTracer.getSpan(request);  //(3)
+
+    try (ActiveSpan activeSpan =
+             dropWizardTracer.getTracer()
+                 .buildSpan("sayHi")
+                 .asChildOf(span)
+                 .startActive()) {  //(4)
+      producer.send(name);
+      return Response.accepted("done.").build();
+    }
+  }
+}
+```
+
+First we inject the Tracer, then we get the span from Request,
+and finally we create an ActiveSpan that wraps the producer.
+
+![Traces together](./images/third-traces-together.png)
+
+And if we go to the detail we can get more insight from the execution:
+
+![Trace details](./images/trace-details.png)
+
+We can get a more deep understanding about the trace execution,
+how the callback works on the producer side, processing the metadata
+asynchronously, and so on.
+

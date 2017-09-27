@@ -4,17 +4,16 @@ import io.dropwizard.Application;
 import io.dropwizard.setup.Environment;
 import io.github.jeqo.posts.infrastructure.KafkaHelloWorldProducer;
 import io.github.jeqo.posts.resource.HelloWorldResource;
-
-import java.util.Properties;
-
 import io.opentracing.Tracer;
 import io.opentracing.contrib.dropwizard.DropWizardTracer;
 import io.opentracing.contrib.dropwizard.ServerTracingFeature;
+import io.opentracing.contrib.kafka.TracingKafkaProducer;
 import io.opentracing.util.GlobalTracer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
+
+import java.util.Properties;
 
 
 /**
@@ -66,13 +65,16 @@ public final class HelloWorldProducerApp extends Application<HelloWorldProducerC
     producerProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
     producerProperties.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
     //Instantiate Kafka Producer
-    final Producer<String, String> kafkaProducer =
+    final KafkaProducer<String, String> kafkaProducer =
         new KafkaProducer<>(producerProperties, new StringSerializer(), new StringSerializer());
+    final TracingKafkaProducer<String, String> tracingKafkaProducer =
+        new TracingKafkaProducer<>(kafkaProducer, tracer);
 
     //Inject dependencies and register endpoint
     final KafkaHelloWorldProducer kafkaHelloWorldProducer =
-        new KafkaHelloWorldProducer(kafkaProducer);
-    final HelloWorldResource helloWorldResource = new HelloWorldResource(kafkaHelloWorldProducer);
+        new KafkaHelloWorldProducer(tracingKafkaProducer);
+    final HelloWorldResource helloWorldResource =
+        new HelloWorldResource(dropWizardTracer, kafkaHelloWorldProducer);
     environment.jersey().register(helloWorldResource);
   }
 }

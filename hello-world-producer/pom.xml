@@ -37,6 +37,11 @@
             <artifactId>jaeger-core</artifactId>
             <version>0.20.6</version>
         </dependency>
+        <dependency>
+            <groupId>io.opentracing.contrib</groupId>
+            <artifactId>opentracing-kafka-client</artifactId>
+            <version>0.0.4</version>
+        </dependency>
     </dependencies>
 
     <build>
