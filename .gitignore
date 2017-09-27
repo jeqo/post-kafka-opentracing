@@ -1,0 +1,5 @@
+target/
+kafka/kafka*/
+kafka/logs/
+kafka/zookeeper/
+jaeger/jaeger*/
