@@ -348,6 +348,7 @@ We can get a more deep understanding about the trace execution,
 how the callback works on the producer side, processing the metadata
 asynchronously, and so on.
 
+
 #### Instrument Kafka Consumer API
 
 Ok, so far so good. We have a complete visibility over the execution on
@@ -468,3 +469,6 @@ we can use `TracingKafkaUtils` to extract it, and reference it:
 
 ![Complete trace](./images/complete-trace.png)
 
+---
+Source code on branch: steps/step-03
+---
