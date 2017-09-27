@@ -73,5 +73,42 @@ Once it is installed, start Zookeeper and then one Kafka broker:
 
 ### Run Applications
 
-To get started, let's start the producer side and test it:
+#### Start Producer Side
 
+To get started, let's start the producer side and test it.
+
+Build the whole project: `./mvnw clean install`
+
+And start the producer application:
+
+```bash
+cd hello-world-producer/
+java -jar target/hello-world-producer.jar server config.yml
+```
+
+This will start a web server listening on port 8080.
+
+We have a resource listening on context `/hello` and an operation
+`GET /hello/{name}` that will call the `KafkaHelloWorldProducer`
+that sends the record to Kafka.
+
+Once the applications is started, we can call the operation with curl:
+
+```bash
+curl -XGET http://localhost:8080/hello/jeqo
+done.
+```
+
+#### Start Consumer Side
+
+Once producer side is started and running, we can start consumer side
+to print out the events:
+
+```bash
+java -jar target/hello-world-consumer.jar server config.yml
+...
+Hi jeqo
+...
+```
+
+So far these are common Kafka producer/consumer applications.

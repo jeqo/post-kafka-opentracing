@@ -30,7 +30,7 @@ public final class HelloWorldConsumerApp extends Application<HelloWorldConsumerC
     final Properties consumerConfigs = new Properties();
     consumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
     consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, getName());
-    consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_DOC, "earliest");
+    consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
     final KafkaConsumer<String, String> kafkaConsumer =

@@ -22,6 +22,6 @@ public class HelloWorldResource {
   @Path("{name}")
   public Response sayHi(@PathParam("name") final String name) {
     producer.send(name);
-    return Response.accepted().build();
+    return Response.accepted("done.").build();
   }
 }
