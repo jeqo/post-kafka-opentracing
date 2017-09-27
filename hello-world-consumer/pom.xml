@@ -22,6 +22,21 @@
             <artifactId>kafka-clients</artifactId>
             <version>0.11.0.1</version>
         </dependency>
+        <dependency>
+            <groupId>io.opentracing</groupId>
+            <artifactId>opentracing-api</artifactId>
+            <version>0.30.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.uber.jaeger</groupId>
+            <artifactId>jaeger-core</artifactId>
+            <version>0.20.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentracing.contrib</groupId>
+            <artifactId>opentracing-kafka-client</artifactId>
+            <version>0.0.4</version>
+        </dependency>
     </dependencies>
 
     <build>

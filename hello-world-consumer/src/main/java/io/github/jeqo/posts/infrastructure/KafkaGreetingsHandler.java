@@ -1,5 +1,10 @@
 package io.github.jeqo.posts.infrastructure;
 
+import io.opentracing.ActiveSpan;
+import io.opentracing.SpanContext;
+import io.opentracing.Tracer;
+import io.opentracing.contrib.kafka.TracingKafkaUtils;
+import io.opentracing.util.GlobalTracer;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -13,9 +18,11 @@ public final class KafkaGreetingsHandler implements Runnable {
 
   static final String GREETINGS_TOPIC = "greetings-topic";
   private final Consumer<String, String> kafkaConsumer;
+  private final Tracer tracer;
 
   public KafkaGreetingsHandler(Consumer<String, String> kafkaConsumer) {
     this.kafkaConsumer = kafkaConsumer;
+    tracer = GlobalTracer.get();
   }
 
   public void run() {
@@ -26,7 +33,16 @@ public final class KafkaGreetingsHandler implements Runnable {
         ConsumerRecords<String, String> consumerRecords = kafkaConsumer.poll(Long.MAX_VALUE);
 
         for (ConsumerRecord<String, String> consumerRecord : consumerRecords) {
-          System.out.println(consumerRecord.value());
+          final SpanContext context =
+              TracingKafkaUtils.extractSpanContext(consumerRecord.headers(), tracer);
+          try (ActiveSpan activeSpan =
+                   tracer.buildSpan("consumption")
+                       .asChildOf(context)
+                       .startActive()) {
+            System.out.println(consumerRecord.value());
+
+            kafkaConsumer.commitSync();
+          }
         }
       }
     } catch (Exception e) {

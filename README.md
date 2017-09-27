@@ -238,6 +238,8 @@ And refresh the Jaeger UI:
 Source code on branch: steps/step-02
 ---
 
+#### Instrument Kafka Producer API
+
 Cool! Now we have how long it takes to return a response on the
 producer side :)
 
@@ -345,4 +347,124 @@ And if we go to the detail we can get more insight from the execution:
 We can get a more deep understanding about the trace execution,
 how the callback works on the producer side, processing the metadata
 asynchronously, and so on.
+
+#### Instrument Kafka Consumer API
+
+Ok, so far so good. We have a complete visibility over the execution on
+the producer side. But what happen next? How the consumer side reacts?
+
+To know that using OpenTracing instrumentation we will using the same
+integration of OpenTracing with Kafka, but it is a bit different.
+
+Again, let's start adding dependencies:
+
+```xml
+        <dependency>
+            <groupId>io.opentracing</groupId>
+            <artifactId>opentracing-api</artifactId>
+            <version>0.30.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.uber.jaeger</groupId>
+            <artifactId>jaeger-core</artifactId>
+            <version>0.20.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentracing.contrib</groupId>
+            <artifactId>opentracing-kafka-client</artifactId>
+            <version>0.0.4</version>
+        </dependency>
+```
+
+`opentracing-api` and `jaeger-core` for instrumentation and `opentracing-kafka-client`
+for integration with Kafka Clients.
+
+Then, we need to instantiate the `Tracer`, but without the `DropwizardTracer`
+given that we don't need to trace HTTP endpoints:
+
+```java
+    //Instantiate and register Tracer
+    final Tracer tracer =
+        new com.uber.jaeger.Configuration(
+            getName(),
+            new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+            new com.uber.jaeger.Configuration.ReporterConfiguration(
+                true,  // logSpans
+                "localhost",
+                6831,
+                1000,   // flush interval in milliseconds
+                10000)  /*max buffered Spans*/)
+            .getTracer();
+    GlobalTracer.register(tracer);
+```
+
+And then, instantiate the `TracingKafkaConsumer`:
+
+```java
+    final TracingKafkaConsumer<String, String> tracingKafkaConsumer =
+        new TracingKafkaConsumer<>(kafkaConsumer, tracer);
+
+    //Define Runnable Handler
+    final KafkaGreetingsHandler greetingsHandler =
+        new KafkaGreetingsHandler(tracingKafkaConsumer)
+```
+
+Should be enough. Let's try it out:
+
+(build and run your consumer side)
+
+```
+./mvnw clean install
+ java -jar target/hello-world-consumer.jar server config.yml
+```
+
+```
+ curl http://localhost:8080/hello/jorge
+```
+
+![Trace with Consumer](./images/trace-with-consumer.png)
+
+That's great! Now we have how long it takes to receive a record on the
+consumer side.
+
+But, what if we want to measure the complete execution, since we get
+the message until we commit it?
+
+To do this, we can add an `ActiveSpan` on the consumption side:
+
+```java
+        for (ConsumerRecord<String, String> consumerRecord : consumerRecords) {
+          try (ActiveSpan activeSpan =
+                   GlobalTracer.get()
+                       .buildSpan("consumption")
+                       //.asChildOf(context)
+                       .startActive()) {
+            System.out.println(consumerRecord.value());
+
+            kafkaConsumer.commitSync();
+          }
+        }
+```
+
+But where is the context coming from?
+
+Well, as `TracingKafkaProducer` inject tracing contexts on Headers,
+we can use `TracingKafkaUtils` to extract it, and reference it:
+
+```java
+        for (ConsumerRecord<String, String> consumerRecord : consumerRecords) {
+          final SpanContext context =
+              TracingKafkaUtils.extractSpanContext(consumerRecord.headers(), tracer);
+          try (ActiveSpan activeSpan =
+                   tracer.buildSpan("consumption")
+                       .asChildOf(context)
+                       .startActive()) {
+            System.out.println(consumerRecord.value());
+
+            kafkaConsumer.commitSync();
+          }
+        }
+```
+
+![Complete trace](./images/complete-trace.png)
 
